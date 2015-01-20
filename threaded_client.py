@@ -1,23 +1,42 @@
-# applicant = raw_input("Enter the applicant's name: ")
-# interviewer = raw_input("Enter the interviewer's name: ")
-# time = raw_input("Enter the appointment time: ")
-# print interviewer + " will interview " + applicant + " at " + time
+#!/usr/bin/env python
 
 import socket
-import time
+import Queue
+import struct
+from threading import Thread
+from time import sleep
 
-numSends = 0
-while True:
-    dataToSend = raw_input('What would you like to send to the server on port 3030?')
-    PORT = 3030
-    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    host = socket.gethostname()
-    host = ""
-    client.connect((host, PORT))
-    numSends += 1
-    client.sendto(bytes(dataToSend), (host, PORT))
-    client.shutdown(socket.SHUT_RDWR)
-    client.close()
-    time.sleep(1)
 
-#########################################################
+#Python's weird way of subclassing...
+class InputListener(Thread):
+    def __init__(self, clientArg):
+        self.client = clientArg
+        super(InputListener, self).__init__()
+
+    #This method gets run upon calling the
+    def run(self):
+        while True:
+            dataToSend = raw_input("What would you like to send? ")
+            self.client.processInput(dataToSend)
+
+
+# server connection variables - these should not change
+IP = "10.0.1.31"
+PORT = 3030
+
+#constant header fields
+MAGIC = struct.pack_into('H', 50237)
+
+
+class Client():
+    def __init__(self):
+
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def processInput(self, dataToSend):
+        self.client.sendto(dataToSend, (IP, PORT))
+
+# immediately start listening for keyboard input
+c = Client()
+inputs = InputListener(c)
+inputs.start();
