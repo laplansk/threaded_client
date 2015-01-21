@@ -26,8 +26,8 @@ class InputListener(Thread):
 
 
 # server connection variables - these should not change
-IP = "10.0.1.31"
-PORT = 3030
+IP = "127.0.0.1"
+PORT = 1200
 
 # assemble the header bytes:
 # 1. input header values

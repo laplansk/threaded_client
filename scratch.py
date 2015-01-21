@@ -31,7 +31,7 @@ GOODBYE = 3
 
 # server connection variables - these should not change
 IP = "127.0.0.1"
-PORT = 3030
+PORT = 1200
 MAGIC = 0xC461
 VERSION = 1
 SESSION_ID = random.getrandbits(32)
@@ -63,7 +63,7 @@ def sendGoodbye():
     # headerArray = {MAGIC1, MAGIC2, VERSION, GOODBYE}
     # headerBytes = bytearray(headerArray)
     # goodbyeMessage = str(headerBytes) + str(SequenceNo) + str(SESSION_ID)
-    goodbyeMessage = struct.pack('H2B2I', MAGIC, 1, GOODBYE, SequenceNo, SESSION_ID)
+    goodbyeMessage = struct.pack('>H2B2I', MAGIC, 1, GOODBYE, SequenceNo, SESSION_ID)
     client.sendto(goodbyeMessage, (IP, PORT))
 
     # wait 5 seconds for a GOODBYE response before exiting
@@ -87,7 +87,7 @@ def sendGoodbye():
 
 
 
-helloMessage = struct.pack('H2B2I', MAGIC, 1, HELLO, SequenceNo, SESSION_ID)
+helloMessage = struct.pack('>H2B2I', MAGIC, 1, HELLO, SequenceNo, SESSION_ID)
 
 # establish connection with server
 # if successful, launch listener
