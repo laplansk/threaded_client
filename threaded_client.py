@@ -25,7 +25,8 @@ IP = "10.0.1.31"
 PORT = 3030
 
 #constant header fields
-MAGIC = struct.pack_into('H', 50237)
+#format string '>H' gives a 2 byte uint (H) in Big-Endian format (>)
+MAGIC = struct.pack_into('>H', 50237)
 
 
 class Client():
