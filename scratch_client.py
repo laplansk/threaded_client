@@ -7,7 +7,7 @@ from threading import Thread
 from time import sleep
 
 # server connection variables - these should not change
-IP = "127.0.0.1"
+IP = "111.111.111.111"
 PORT = 3030
 
 # assemble the header bytes:

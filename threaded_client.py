@@ -6,6 +6,11 @@ import struct
 from threading import Thread
 from time import sleep
 
+# valid packet commands
+HELLO = 0
+DATA = 1
+ALIVE = 2
+GOODBYE = 3
 
 #Python's weird way of subclassing...
 class InputListener(Thread):
@@ -24,10 +29,11 @@ class InputListener(Thread):
 IP = "10.0.1.31"
 PORT = 3030
 
-#constant header fields
-#format string '>H' gives a 2 byte uint (H) in Big-Endian format (>)
-MAGIC = struct.pack_into('>H', 50237)
-
+# assemble the header bytes:
+# 1. input header values
+# 2. reduce values to single bytes
+headerArray = {196, 96, 1, 0, 123}
+headerBytes = bytearray(headerArray)
 
 class Client():
     def __init__(self):
