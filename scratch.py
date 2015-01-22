@@ -87,18 +87,13 @@ def sendGoodbye():
 
 
 
-helloMessage = struct.pack('>H2B2I', MAGIC, 1, HELLO, SequenceNo, SESSION_ID)
+
 
 # establish connection with server
 # if successful, launch listener
-# else exit?
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # assemble the header bytes:
-# 1. input header values
-# 2. reduce necessary values to single bytes
-# headerArray = {MAGIC1, MAGIC2, VERSION, HELLO}
-# headerBytes = bytearray(headerArray)
-# fullHeader = str(headerBytes) + str(SequenceNo) + str(SESSION_ID)
+helloMessage = struct.pack('>H2B2I', MAGIC, 1, HELLO, SequenceNo, SESSION_ID)
 client.sendto(helloMessage, (IP, PORT))
 client.settimeout(5)
 SequenceNo += 1
@@ -106,17 +101,20 @@ SequenceNo += 1
 # check for response within timeout
 while True:
     try:
-        response = client.recv(1024)
+        message = client.recv(1024)
+        response = struct.unpack('>H2B2I', message[:12])
+        print response[0]
+        print response[1]
+        print response[2]
+        print response[3]
+        print response[4]
+            # TODO fire up listener and start listening for responses
+            inputListener = InputListener()
+            inputListener.start()
+            responseListen()
+
     except socket.timeout, e:
         if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
             continue
         elif e.args[0] == 'timed out':
             sendGoodbye()
-        elif response == "HELLO":
-            # TODO fire up listener and start listening for responses
-            inputListener = InputListener()
-            inputListener.start()
-            responseListen()
-        else:
-            print "error"
-            sys.exit(1)
