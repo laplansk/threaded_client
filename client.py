@@ -101,6 +101,8 @@ def sendGoodbye():
                 sys.exit(0)
 
 
+# get host and port from keyboard
+
 # establish connection with server
 # if successful, launch listener
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
