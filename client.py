@@ -73,7 +73,7 @@ class InputListener(Thread):
             except EOFError:
                 print "eof"
                 END = True
-                client.close()
+                # client.close()
                 sys.exit()
 
 def sendGoodbye():
@@ -89,15 +89,15 @@ def sendGoodbye():
             response = struct.unpack('>H2B2I', rawResponse[:12])
             if response[2] == GOODBYE:
                 END = True
-                client.close()
+                # client.close()
                 sys.exit(0)
             else:
                 print 'error'
-                client.close()
+                # client.close()
                 sys.exit(1)
         except socket.timeout:
             END = True
-            client.close()
+            # client.close()
             sys.exit(0)
 
 
@@ -156,7 +156,7 @@ class ServerComm(Thread):
                             elif response[2] == GOODBYE:
                                 END = True
                                 client.settimeout(None)
-                                client.close()
+                                # client.close()
                                 sys.exit(0)
                         except socket.timeout:
                             print "timeout"
@@ -165,12 +165,12 @@ class ServerComm(Thread):
                         except EOFError:
                             print "eof"
                             END = True
-                            client.close()
+                            # client.close()
                             sys.exit()
                 elif response[2] == GOODBYE:
                     print "server sent goodbye message : disconnecting"
                     END = True
-                    client.close()	
+                    # client.close()
                     sys.exit(0)
             except socket.timeout, e:
                 print "timeout on HELLO"
