@@ -10,13 +10,14 @@ import struct
 
 # Python's weird way of subclassing...
 class InputListener(Thread):
-    def __init__(self, seqNo):
+    def __init__(self, client):
         super(InputListener, self).__init__()
 
     # This method gets run upon calling the
     def run(self):
         while True:
             try:
+				seqNo = 1
                 dataToSend = raw_input("What would you like to send? ")
                 # check if user wants to quit
                 if dataToSend == 'q':
@@ -24,16 +25,23 @@ class InputListener(Thread):
                     sendGoodbye()
                     break
                 else:
-                    header = struct.pack('>H2B2I', MAGIC, 1, DATA, SequenceNo, SESSION_ID)
-                    SequenceNo += 1
+                    header = struct.pack('>H2B2I', MAGIC, seqNo, DATA, 1, SESSION_ID)
+                    seqNo += 1
                     packet = header + dataToSend
                     client.sendto(packet, (IP, PORT))
                     client.settimeout(5)
-            except (EOFError):
-                #client.shutdown(socket.SHUT_RDWR)
-		print "eof"
-		client.close()
-                sys.exit()
+            except (EOFError, socket.timeout, e):
+	            if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
+	                continue
+	            elif e.args[0] == 'timed out':
+					print "client timeout"
+	                sendGoodbye()
+	                break
+	                #client.shutdown(socket.SHUT_RDWR)
+				elif EOFError:
+					print "eof"
+					client.close()
+	                sys.exit()
 
 # valid packet commands
 HELLO = 0
@@ -56,11 +64,12 @@ def responseListen():
             rawResponse = client.recv(1024)
             response = struct.unpack('>H2B2I', rawResponse[:12])  # check that magic number and version are correct
             if response[0] != 50273 or response[1] != 1:
+		print "continuing"
                 continue
             elif response[2] == ALIVE:
                 client.settimeout(None)
             elif response[2] == GOODBYE:
-                print "server send goodbye message : disconnecting"
+                print "server sent goodbye message : disconnecting"
                 #client.shutdown(socket.SHUT_RDWR)
                 client.close()
 		sys.exit(0)
@@ -68,6 +77,7 @@ def responseListen():
             if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
                 continue
             elif e.args[0] == 'timed out':
+		print "client timeout"
                 sendGoodbye()
                 break
             else:
