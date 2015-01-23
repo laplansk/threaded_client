@@ -1,11 +1,7 @@
 var dgram = require('dgram');
 var util = require('util');
 
-
-var MAGIC = 0xC461;
-var VERSION = 1;
 var SERVER_PORT = 33333;
-
 
 // create datagram (UDP) socket for IPv4 traffic
 var serverSocket = dgram.createSocket('udp4');
@@ -20,8 +16,6 @@ serverSocket.on('listening', function() {
 // fires when a packet arrives
 serverSocket.on('message', function(message, remote){
 	util.log(remote.address + ':' + remote.port + ' - ' + message);
-	// check the magic number and version number
-	
 	serverSocket.send(message, 0 , message.length, remote.port, remote.address);
 });
 
