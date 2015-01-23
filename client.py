@@ -17,10 +17,9 @@ class InputListener(Thread):
     def run(self):
         while True:
             try:
-				seqNo = 1
-				dataToSend = raw_input("What would you like to send? ")
-				# check if user wants to quit
-				if dataToSend == 'q':
+                seqNo = 1
+                dataToSend = raw_input("What would you like to send? ")
+                if dataToSend == 'q':
                     print "user typed q : sending goodbye message"
                     sendGoodbye()
                     break
@@ -31,17 +30,17 @@ class InputListener(Thread):
                     client.sendto(packet, (IP, PORT))
                     client.settimeout(5)
             except (EOFError, socket.timeout, e):
-	            if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
-	                continue
-	            elif e.args[0] == 'timed out':
-					print "client timeout"
-	                sendGoodbye()
-	                break
-	                #client.shutdown(socket.SHUT_RDWR)
-				elif EOFError:
-					print "eof"
-					client.close()
-	                sys.exit()
+                if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
+                    continue
+                elif e.args[0] == 'timed out':
+                    print "client timeout"
+                    sendGoodbye()
+                    break
+                # client.shutdown(socket.SHUT_RDWR)
+                elif EOFError:
+                    print "eof"
+                    client.close()
+                    sys.exit()
 
 # valid packet commands
 HELLO = 0
