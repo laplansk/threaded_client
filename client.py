@@ -91,10 +91,10 @@ def sendGoodbye():
                 END = True
                 # client.close()
                 sys.exit(0)
-            else:
-                print 'error'
+            # else:
+            #     print 'error'
                 # client.close()
-                sys.exit(1)
+            #     sys.exit(1)
         except socket.timeout:
             END = True
             # client.close()
