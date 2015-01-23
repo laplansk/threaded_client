@@ -159,10 +159,11 @@ class ServerComm(Thread):
                                 client.settimeout(None)
                                 # client.close()
                                 sys.exit(0)
-                        except socket.timeout:
-                            print "timeout"
-                            sendGoodbye()
-                            break
+                        except socket.timeout as e:
+                            if e.message == "time out":
+                                print "timeout"
+                                sendGoodbye()
+                                break
                         except EOFError:
                             print "eof"
                             END = True
