@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
 import socket
-import errno
 import sys
 from threading import Thread
-from time import sleep
 import random
 import struct
 
@@ -66,14 +64,12 @@ class InputListener(Thread):
                     client.sendto(packet, (IP, PORT))
                     client.settimeout(5)
             except socket.timeout:
-                print "timeout1"
                 END = True
                 sendGoodbye()
                 break
             except EOFError:
                 print "eof"
                 END = True
-                # client.close()
                 sys.exit()
 
 def sendGoodbye():
@@ -89,15 +85,9 @@ def sendGoodbye():
             response = struct.unpack('>H2B2I', rawResponse[:12])
             if response[2] == GOODBYE:
                 END = True
-                # client.close()
                 sys.exit(0)
-            # else:
-            #     print 'error'
-                # client.close()
-            #     sys.exit(1)
         except socket.timeout:
             END = True
-            # client.close()
             sys.exit(0)
 
 
@@ -133,7 +123,6 @@ class ServerComm(Thread):
         # expect response within timeout
         while True:
             try:
-                print client.gettimeout()
                 message = client.recv(1024)
                 response = struct.unpack('>H2B2I', message[:12])
                 if response[0] != 50273 or response[1] != 1:
@@ -157,25 +146,19 @@ class ServerComm(Thread):
                             elif response[2] == GOODBYE:
                                 END = True
                                 client.settimeout(None)
-                                # client.close()
                                 sys.exit(0)
                         except socket.timeout as e:
                             if e.message == "time out":
-                                print "timeout"
                                 sendGoodbye()
                                 break
                         except EOFError:
                             print "eof"
                             END = True
-                            # client.close()
                             sys.exit()
                 elif response[2] == GOODBYE:
-                    print "server sent goodbye message : disconnecting"
                     END = True
-                    # client.close()
                     sys.exit(0)
-            except socket.timeout, e:
-                print "timeout on HELLO"
+            except socket.timeout:
                 sendGoodbye()
                 break
 
