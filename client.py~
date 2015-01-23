@@ -8,7 +8,9 @@ from time import sleep
 import random
 import struct
 
+# global flag; TRUE indicates that all threads should terminate
 END = False
+
 # valid packet commands
 HELLO = 0
 DATA = 1
@@ -24,7 +26,6 @@ SequenceNo = 0
 SESSION_ID = random.getrandbits(32)
 
 
-# Python's weird way of subclassing...
 class InputListener(Thread):
     def __init__(self, client):
         super(InputListener, self).__init__()
@@ -49,11 +50,12 @@ class InputListener(Thread):
         global SESSION_ID
         global client
 
+        # loop to get user input
         while True:
             try:
-                dataToSend = raw_input("What would you like to send? ")
+                dataToSend = raw_input("")
                 if dataToSend == 'q':
-                    print "user typed q : sending goodbye message"
+                    client.settimeout(None)
                     End = True
                     sendGoodbye()
                     sys.exit()
@@ -64,7 +66,8 @@ class InputListener(Thread):
                     client.sendto(packet, (IP, PORT))
                     client.settimeout(5)
             except socket.timeout:
-                print "client timeout"
+                print "timeout1"
+                END = True
                 sendGoodbye()
                 break
             except EOFError:
@@ -82,10 +85,9 @@ def sendGoodbye():
     client.settimeout(5)
     while True:
         try:
-            rawResponse = client.recv(1024)
+            rawResponse = client.recv(2048)
             response = struct.unpack('>H2B2I', rawResponse[:12])
             if response[2] == GOODBYE:
-                print 'server reciprocated will to end connection'
                 END = True
                 client.close()
                 sys.exit(0)
@@ -94,16 +96,11 @@ def sendGoodbye():
                 client.close()
                 sys.exit(1)
         except socket.timeout:
-            print 'timeout on goodbye'
             END = True
             client.close()
             sys.exit(0)
 
 
-
-
-
-# Python's weird way of subclassing...
 class ServerComm(Thread):
     def __init__(self):
         super(ServerComm, self).__init__()
@@ -111,6 +108,7 @@ class ServerComm(Thread):
     # This method gets run upon calling the 
     # start() method on an instance of this object
     def run(self):
+        
         global END
         # valid packet commands
         global HELLO
@@ -118,7 +116,7 @@ class ServerComm(Thread):
         global ALIVE
         global GOODBYE
 
-        # server connection variables - these should not change
+        # server connection variables
         global IP
         global PORT
         global MAGIC
@@ -127,14 +125,12 @@ class ServerComm(Thread):
         global SESSION_ID
         global client
         
-        # establish connection with server
-        # if successful, launch listener
-        # assemble the header bytes:
+        # assemble the header bytes for HELLO / initial message:
         helloMessage = struct.pack('>H2B2I', MAGIC, 1, HELLO, SequenceNo, SESSION_ID)
         client.sendto(helloMessage, (IP, PORT))
         client.settimeout(5)
 
-        # check for response within timeout
+        # expect response within timeout
         while True:
             try:
                 message = client.recv(1024)
@@ -142,28 +138,28 @@ class ServerComm(Thread):
                 if response[0] != 50273 or response[1] != 1:
                     continue
                 elif response[2] == HELLO:
-                    # desired response received so cancel timer
                     client.settimeout(None)
                     SequenceNo += 1
                     # fire up listener and start listening for responses from server
                     inputListener = InputListener(client)
                     inputListener.setDaemon(True)
                     inputListener.start()
+                    # loop, listening for responses from server
                     while not END:
                         try:
                             rawResponse = client.recv(1024)
                             response = struct.unpack('>H2B2I', rawResponse[:12])  # check that magic number and version are correct
                             if response[0] != 50273 or response[1] != 1:
-                                print "continuing"
                                 continue
                             elif response[2] == ALIVE:
                                 client.settimeout(None)
                             elif response[2] == GOODBYE:
-                                print "server sent goodbye message : disconnecting"
+                                END = True
+                                client.settimeout(None)
                                 client.close()
                                 sys.exit(0)
                         except socket.timeout:
-                            print "client timeout"
+                            print "timeout"
                             sendGoodbye()
                             break
                         except EOFError:
@@ -182,17 +178,19 @@ class ServerComm(Thread):
                 break
 
 
-# get host and port from command line
+# get host and port from command line, create socket
 IP = sys.argv[1];
 PORT = int(sys.argv[2]);
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-print "starting serverThread"
+
+# start thread that will receive response from server
 serverThread = ServerComm()
 serverThread.setDaemon(True)
 serverThread.start()
+
+# loop until one of the threads signals otherwise by changing the global END
 while not END:
     continue
 
-print "exiting"
 sys.exit(0)
 
