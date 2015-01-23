@@ -8,40 +8,48 @@ from time import sleep
 import random
 import struct
 
+END = False
+
 # Python's weird way of subclassing...
 class InputListener(Thread):
     def __init__(self, client):
         super(InputListener, self).__init__()
 
-    # This method gets run upon calling the
+    # This method gets run upon calling the 
+    # start() method on an instance of this object
     def run(self):
+        global END
+        seqNo = 1
+
         while True:
             try:
-                seqNo = 1
                 dataToSend = raw_input("What would you like to send? ")
                 if dataToSend == 'q':
                     print "user typed q : sending goodbye message"
+                    END = True
                     sendGoodbye()
                     break
                 else:
-                    header = struct.pack('>H2B2I', MAGIC, seqNo, DATA, 1, SESSION_ID)
+                    header = struct.pack('>H2B2I', MAGIC, VERSION, DATA, seqNo, SESSION_ID)
                     seqNo += 1
                     packet = header + dataToSend
                     client.sendto(packet, (IP, PORT))
                     client.settimeout(5)
-            except (EOFError, socket.timeout, e):
-                if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
-                    continue
-                elif e.args[0] == 'timed out':
-                    print "client timeout"
-                    sendGoodbye()
-                    break
-                # client.shutdown(socket.SHUT_RDWR)
-                elif EOFError:
-                    print "eof"
-                    client.close()
-                    sys.exit()
-
+            except socket.timeout:
+                print "client timeout"
+                END = True
+                sendGoodbye()
+                break
+            except EOFError:
+                print "eof"
+                END = True
+                client.close()
+                sys.exit()
+            #finally:
+            #    print "error"
+            #    END = True
+            #    client.close()
+            #    sys.exit()
 # valid packet commands
 HELLO = 0
 DATA = 1
@@ -58,8 +66,10 @@ SESSION_ID = random.getrandbits(32)
 
 
 def responseListen():
-    while True:
+    global END
+    while not END:
         try:
+            print END
             rawResponse = client.recv(1024)
             response = struct.unpack('>H2B2I', rawResponse[:12])  # check that magic number and version are correct
             if response[0] != 50273 or response[1] != 1:
@@ -71,19 +81,20 @@ def responseListen():
                 print "server sent goodbye message : disconnecting"
                 #client.shutdown(socket.SHUT_RDWR)
                 client.close()
-		sys.exit(0)
-        except socket.timeout, e:
-            if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
-                continue
-            elif e.args[0] == 'timed out':
-		print "client timeout"
-                sendGoodbye()
-                break
-            else:
-                print "error"
-                #client.shutdown(socket.SHUT_RDWR)
-		client.close()
-                sys.exit(1)
+                sys.exit(0)
+        except socket.timeout:
+            print "client timeout"
+            sendGoodbye()
+            break
+        except EOFError:
+            print "eof"
+            END = True
+            client.close()
+            sys.exit()
+        #finally:
+        #    print "error"
+        #    client.close()
+        #    sys.exit(1)
 
 
 def sendGoodbye():
@@ -100,21 +111,17 @@ def sendGoodbye():
             if response[2] == GOODBYE:
                 print 'server reciprocated will to end connection'
                 #client.shutdown(socket.SHUT_RDWR)
-		client.close()
+                END = True
+                client.close()
                 sys.exit(0)
             else:
                 print 'error'
-                #client.shutdown(socket.SHUT_RDWR)
-		client.close()
+                client.close()
                 sys.exit(1)
-        except socket.timeout, e:
-            if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
-                continue
-            elif e.args[0] == 'timed out':
-                print 'timeout on goodbye'
-                #client.shutdown(socket.SHUT_RDWR)
-		client.close()
-                sys.exit(0)
+        except socket.timeout:
+            print 'timeout on goodbye'
+            client.close()
+            sys.exit(0)
 
 
 # get host and port from command line
@@ -129,7 +136,7 @@ client.sendto(helloMessage, (IP, PORT))
 client.settimeout(5)
 
 # check for response within timeout
-while True:
+while not END:
     try:
         message = client.recv(1024)
         response = struct.unpack('>H2B2I', message[:12])
@@ -141,17 +148,15 @@ while True:
             SequenceNo += 1
             # fire up listener and start listening for responses from server
             inputListener = InputListener(client)
+            inputListener.setDaemon(True)
             inputListener.start()
             responseListen()
         elif response[2] == GOODBYE:
             print "server sent goodbye message : disconnecting"
             #client.shutdown(socket.SHUT_RDWR)
-	    client.close()	
+            client.close()	
             sys.exit(0)
-
     except socket.timeout, e:
-        if e.args[0] == errno.EAGAIN or e.args[0] == errno.EWOULDBLOCK:
-            continue
-        elif e.args[0] == 'timed out':
+            print "timeout on HELLO"
             sendGoodbye()
             break
