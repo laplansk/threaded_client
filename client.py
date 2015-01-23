@@ -133,6 +133,7 @@ class ServerComm(Thread):
         # expect response within timeout
         while True:
             try:
+                print client.gettimeout()
                 message = client.recv(1024)
                 response = struct.unpack('>H2B2I', message[:12])
                 if response[0] != 50273 or response[1] != 1:
