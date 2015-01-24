@@ -51,10 +51,10 @@ class InputListener(Thread):
         # loop to get user input
         while True:
             try:
-                dataToSend = raw_input("")
+                dataToSend = raw_input()
                 if dataToSend == 'q':
                     client.settimeout(None)
-                    End = True
+                    END = True
                     sendGoodbye()
                     sys.exit()
                 else:
@@ -68,7 +68,7 @@ class InputListener(Thread):
                 sendGoodbye()
                 break
             except EOFError:
-                print "eof"
+                print "eof1"
                 END = True
                 sys.exit()
 
@@ -152,15 +152,16 @@ class ServerComm(Thread):
                                 sendGoodbye()
                                 break
                         except EOFError:
-                            print "eof"
+                            print "eof2"
                             END = True
                             sys.exit()
                 elif response[2] == GOODBYE:
                     END = True
                     sys.exit(0)
-            except socket.timeout:
-                sendGoodbye()
-                break
+            except socket.timeout as e:
+                if e.message == "time out":
+                    sendGoodbye()
+                    break
 
 
 # get host and port from command line, create socket

@@ -1,10 +1,7 @@
 #!/usr/bin/node
 
 var dgram = require('dgram');
-var util = require('util');
 
-
-var SERVER_PORT = 33333;
 var MAGIC = 0xC461
 var VERSION = 1
 
@@ -40,13 +37,13 @@ function send(command, sess_id, callback) {
 	message.writeUInt32BE(sessions[sess_id][2], 4);
 	message.writeUInt32BE(sess_id, 8);
 
-        server.send(message, 0, message.length, client_port, client_address, callback(sess_id)); // <- callback = startTimer
+    server.send(message, 0, message.length, client_port, client_address, callback(sess_id)); // <- callback = startTimer
 }
 
 // this function will reset any timers if they already exist.
 function startTimer(sess_id){
     clearTimeout(sessions[sess_id][3]);
-    sessions[sess_id][3] = setTimeout(function(){startGoodBye(sess_id);}, 50000);
+    sessions[sess_id][3] = setTimeout(function(){startGoodBye(sess_id);}, 5000);
 }
 
 function startGoodBye(sess_id){
@@ -59,6 +56,7 @@ function startGoodBye(sess_id){
 }
 
 
+// send GOODBYE to all open session clients then exit
 function shutDown(map){
 
     //  base case == no more sessions, so exit
@@ -79,31 +77,16 @@ function shutDown(map){
     }
 
     // Send GOODBYE message to client associated with this session
-    // prepare GOODBYE message
- /*   var message = new Buffer(12);
-	message.writeUInt16BE(MAGIC, 0);
-	message.writeUInt8(VERSION, 2);
-	message.writeUInt8(Command.GOODBYE, 3);
-	message.writeUInt32BE(session_info[2], 4);
-	message.writeUInt32BE(sess_no, 8);*/
-
-    // TODO get header ready - no data
     send(Command.GOODBYE, session_no, function(){
         delete map[session_no];
         shutDown(map);
         }
-);
-    //server.send(goodbyeMessage, 0, goodbyeMessage.length, session_info[1], session_info[0]);
-  //  shutDown(map);
+    );
 }
 
 // Verify a P0P header
 function verify(received_magic, received_version) {
-    if (received_magic == MAGIC && received_version == VERSION){
-        return true;
-    } else {
-        return false;
-    }
+    return received_magic == MAGIC && received_version == VERSION
 }
 
 
@@ -132,11 +115,10 @@ server.on('message', function (message, client) {
     } else { // process message
         if (command == Command.HELLO) {
             if (sess_id in sessions){ // message is a duplicate
-
+                console.log("Duplicate Packet");
             } else {
                 // create new session, respond with HELLO, start timer
                 sessions[sess_id] = [client.address, client.port, 0, -2];
-                //console.log("event handler : " + sessions[sess_id]);
                 send(Command.HELLO, sess_id, function(sess_id){
                     process.stdout.write("0x" + sess_id.toString(16) + " ");
                     process.stdout.write("[" + sessions[sess_id][2] + "] ");
@@ -146,15 +128,27 @@ server.on('message', function (message, client) {
             }
         }
         else if (command == Command.DATA) {
+            data = message.toString('utf-8', 12, message.length);
             if(sess_id in sessions){
-                data = message.toString('utf-8', 12, message.length);
-                sessions[sess_id][2]++;
-                send(Command.ALIVE, sess_id, function(sess_id){
-                    process.stdout.write("0x" + sess_id.toString(16) + " ");
-                    process.stdout.write("[" + sessions[sess_id][2] + "] ");
-                    process.stdout.write(data + "\n");
-                    startTimer(sess_id);
-                });
+                // Is the packet in the right order or not?
+                if(seqNo = sessions[sess_id][2] + 1) { // in order
+                    sessions[sess_id][2]++;
+                    send(Command.ALIVE, sess_id, function (sess_id) {
+                        process.stdout.write("0x" + sess_id.toString(16) + " ");
+                        process.stdout.write("[" + sessions[sess_id][2] + "] ");
+                        process.stdout.write(data + "\n");
+                        startTimer(sess_id);
+                    });
+                } else {
+                    // packet is out of order so print lost packets for the difference
+                    var difference = seqNo - sessions[sess_id][2];
+                    sessions[sess_id][2] = seqNo;
+                    for (var i = sessions[sess_id][2]; i <= seqNo; i++){
+                        process.stdout.write("0x" + sess_id.toString(16) + " ");
+                        process.stdout.write("[" + i + "] ");
+                        process.stdout.write("Lost Packet!\n");
+                    }
+                }
             }
         }
     }
@@ -163,6 +157,8 @@ server.on('message', function (message, client) {
 // an array to hold sessions: {[session_id] -> [address, port, seqNo, timer]}
 var sessions = [];
 
+var SERVER_PORT = process.argv[2];
+
 server.bind(SERVER_PORT);
 
 process.stdin.resume();
@@ -170,7 +166,7 @@ process.stdin.resume();
 //listen for input
 process.stdin.on('data', function(chunk){
     input = chunk.toString()
-    if (input == 'q') {
+    if (input === "q") {
         // send GOODBYE to ALL clients with open sessions, then terminate
         shutDown(sessions);
     }
@@ -179,6 +175,5 @@ process.stdin.on('data', function(chunk){
 // On EOF
 process.stdin.on('end', function() {
     // send GOODBYE to all clients with open sessions, then terminate
-    util.log("shutdown requested");
     shutDown(sessions);
 });
