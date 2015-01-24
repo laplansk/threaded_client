@@ -1,16 +1,12 @@
 #!/usr/bin/node
 
-// Comments only for differences from ../node.js-Simple/server.js
 var dgram = require('dgram');
 var util = require('util');
-var readline = require('readline');
-var fs = require('fs');
+
 
 var SERVER_PORT = 33333;
 var MAGIC = 0xC461
 var VERSION = 1
-
-// (address, port, seqNo, timer)
 
 var Command = {
 	HELLO : 0,
@@ -31,59 +27,37 @@ function isEmpty(map) {
 }
 
 
-// Send
-function send(command, data, sess_id, callback) {
-    //console.log("reached send function");
-    //console.log("sess_id : " + sess_id);
-	var datalength = data ? data.length : 0;
+// takes a command(ALIVE, GOODBYE, etc.) and a function execute when finished
+function send(command, sess_id, callback) {
 	var client_address = sessions[sess_id][0];
 	var client_port = sessions[sess_id][1];
+
 	// Create header
-	var message = new Buffer(12 + datalength);
+	var message = new Buffer(12);
 	message.writeUInt16BE(MAGIC, 0);
 	message.writeUInt8(VERSION, 2);
 	message.writeUInt8(command, 3);
 	message.writeUInt32BE(sessions[sess_id][2], 4);
 	message.writeUInt32BE(sess_id, 8);
 
-    /*console.log("MAGIC: " + MAGIC);
-    console.log("VERSION: " + VERSION);
-    console.log("COMMAND: " + command);
-    console.log("seqNo: " + sessions[sess_id][2]);
-    console.log("sess_id: " + sess_id);
-    console.log("client port: " + client_port);
-    console.log("client address: " + client_address);*/
-	// Add payload, if it exists
-	var offset = 12;
-	for (ii = 0; ii < datalength; ii++) {
-		message.writeUInt8(data[ii], offset);
-		offset++;
-	}
-    //console.log("HELLO MESSAGE RETURNED");
-	server.send(message, 0, message.length, client_port, client_address, callback(sess_id)); // <- callback = startTimer
+        server.send(message, 0, message.length, client_port, client_address, callback(sess_id)); // <- callback = startTimer
 }
 
+// this function will reset any timers if they already exist.
 function startTimer(sess_id){
-    //console.log("reached startTimer function");
-    //console.log("sess_id : " + sess_id);
-    //this function will reset any timers if they already exist.
     clearTimeout(sessions[sess_id][3]);
-    //console.log("sess_id : " + sess_id);
-    //console.log("sessions[sess_id] : " + sessions[sess_id]);
-    sessions[sess_id][3] = setTimeout(function(){startGoodBye(sess_id);}, 5000);
+    sessions[sess_id][3] = setTimeout(function(){startGoodBye(sess_id);}, 50000);
 }
 
 function startGoodBye(sess_id){
-    //console.log("reached startGoodBye function");
-    var session_info = sessions[sess_id];
-    //console.log("sess_id : " + sess_id);
-    send(Command.GOODBYE, "", sess_id, function(sess_id){
+    send(Command.GOODBYE, sess_id, function(sess_id){
         clearTimeout(sessions[sess_id][3]);
         process.stdout.write("0x" + sess_id.toString(16) + " ");
         process.stdout.write("Session closed\n");
         delete sessions[sess_id];
     });
 }
+
 
 function shutDown(map){
 
@@ -95,27 +69,32 @@ function shutDown(map){
     // get info from one of remaining sessions, then delete it from the map
     var session_no
     var session_info;
-    for(var sess_no in map){
-        session_no = sess_no;
-        session_info = map[sess_no];
+    for(var s in map){
+        session_no = s;
+        //session_info = map[sess_no];
         // stop timer for this session
-        clearTimeout(session_info[3]);
-        delete map[sess_no];
+        clearTimeout(map[session_no][3]);
+        //delete map[sess_no];
         break;
     }
 
     // Send GOODBYE message to client associated with this session
     // prepare GOODBYE message
-    var message = new Buffer(12);
+ /*   var message = new Buffer(12);
 	message.writeUInt16BE(MAGIC, 0);
 	message.writeUInt8(VERSION, 2);
 	message.writeUInt8(Command.GOODBYE, 3);
 	message.writeUInt32BE(session_info[2], 4);
-	message.writeUInt32BE(sess_no, 8);
+	message.writeUInt32BE(sess_no, 8);*/
 
     // TODO get header ready - no data
-    server.send(goodbyeMessage, 0, goodbyeMessage.length, session_info[1], session_info[0]);
-    shutDown(map);
+    send(Command.GOODBYE, session_no, function(){
+        delete map[session_no];
+        shutDown(map);
+        }
+);
+    //server.send(goodbyeMessage, 0, goodbyeMessage.length, session_info[1], session_info[0]);
+  //  shutDown(map);
 }
 
 // Verify a P0P header
@@ -145,13 +124,7 @@ server.on('message', function (message, client) {
     var command = message.readUInt8(3);
     var seqNo = message.readUInt32BE(4);
     var sess_id = message.readUInt32BE(8);
-/*
-    console.log("MAGIC: " + magic_number);
-    console.log("VERSION: " + version_number);
-    console.log("COMMAND: " + command);
-    console.log("seqNo: " + seqNo);
-    console.log("sess_id: " + sess_id);
-*/
+
     // check that MAGIC and VERSION are correct
     //if not, exit function/discard/ignore packet
     if(!verify(magic_number, version_number)){
@@ -160,11 +133,11 @@ server.on('message', function (message, client) {
         if (command == Command.HELLO) {
             if (sess_id in sessions){ // message is a duplicate
 
-            } else { // create new session, respond in kind
+            } else {
                 // create new session, respond with HELLO, start timer
                 sessions[sess_id] = [client.address, client.port, 0, -2];
                 //console.log("event handler : " + sessions[sess_id]);
-                send(Command.HELLO, "", sess_id, function(sess_id){
+                send(Command.HELLO, sess_id, function(sess_id){
                     process.stdout.write("0x" + sess_id.toString(16) + " ");
                     process.stdout.write("[" + sessions[sess_id][2] + "] ");
                     process.stdout.write("Session created\n");
@@ -176,7 +149,7 @@ server.on('message', function (message, client) {
             if(sess_id in sessions){
                 data = message.toString('utf-8', 12, message.length);
                 sessions[sess_id][2]++;
-                send(Command.ALIVE, "", sess_id, function(sess_id){
+                send(Command.ALIVE, sess_id, function(sess_id){
                     process.stdout.write("0x" + sess_id.toString(16) + " ");
                     process.stdout.write("[" + sessions[sess_id][2] + "] ");
                     process.stdout.write(data + "\n");
@@ -191,6 +164,8 @@ server.on('message', function (message, client) {
 var sessions = [];
 
 server.bind(SERVER_PORT);
+
+process.stdin.resume();
 
 //listen for input
 process.stdin.on('data', function(chunk){
