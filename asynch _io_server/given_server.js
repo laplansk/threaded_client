@@ -10,6 +10,8 @@ var SERVER_PORT = 33333;
 var MAGIC = 0xC461
 var VERSION = 1
 
+// (address, port, seqNo, timer)
+
 var Command = {
 	HELLO : 0,
 	DATA : 1,
@@ -28,18 +30,65 @@ function isEmpty(map) {
     return true;
 }
 
-// send Goodbye Message to a single client
-function sendGoodbye(session_id) {
-// TODO send goodbye message to client associated with session_id
-// double check that session_id is valid?
+
+// Send
+function send(command, data, sess_id, callback) {
+    //console.log("reached send function");
+    //console.log("sess_id : " + sess_id);
+	var datalength = data ? data.length : 0;
+	var client_address = sessions[sess_id][0];
+	var client_port = sessions[sess_id][1];
+	// Create header
+	var message = new Buffer(12 + datalength);
+	message.writeUInt16BE(MAGIC, 0);
+	message.writeUInt8(VERSION, 2);
+	message.writeUInt8(command, 3);
+	message.writeUInt32BE(sessions[sess_id][2], 4);
+	message.writeUInt32BE(sess_id, 8);
+
+    /*console.log("MAGIC: " + MAGIC);
+    console.log("VERSION: " + VERSION);
+    console.log("COMMAND: " + command);
+    console.log("seqNo: " + sessions[sess_id][2]);
+    console.log("sess_id: " + sess_id);
+    console.log("client port: " + client_port);
+    console.log("client address: " + client_address);*/
+	// Add payload, if it exists
+	var offset = 12;
+	for (ii = 0; ii < datalength; ii++) {
+		message.writeUInt8(data[ii], offset);
+		offset++;
+	}
+    //console.log("HELLO MESSAGE RETURNED");
+	server.send(message, 0, message.length, client_port, client_address, callback(sess_id)); // <- callback = startTimer
 }
 
+function startTimer(sess_id){
+    //console.log("reached startTimer function");
+    //console.log("sess_id : " + sess_id);
+    //this function will reset any timers if they already exist.
+    clearTimeout(sessions[sess_id][3]);
+    //console.log("sess_id : " + sess_id);
+    //console.log("sessions[sess_id] : " + sessions[sess_id]);
+    sessions[sess_id][3] = setTimeout(function(){startGoodBye(sess_id);}, 5000);
+}
 
+function startGoodBye(sess_id){
+    //console.log("reached startGoodBye function");
+    var session_info = sessions[sess_id];
+    //console.log("sess_id : " + sess_id);
+    send(Command.GOODBYE, "", sess_id, function(sess_id){
+        clearTimeout(sessions[sess_id][3]);
+        process.stdout.write("0x" + sess_id.toString(16) + " ");
+        process.stdout.write("Session closed\n");
+        delete sessions[sess_id];
+    });
+}
 
-function sendGoodbye(map){
+function shutDown(map){
 
-    //  base case = no more sessions, so exit
-    if isEmpty(map){
+    //  base case == no more sessions, so exit
+    if (isEmpty(map)){
         process.exit();
     }
 
@@ -49,6 +98,8 @@ function sendGoodbye(map){
     for(var sess_no in map){
         session_no = sess_no;
         session_info = map[sess_no];
+        // stop timer for this session
+        clearTimeout(session_info[3]);
         delete map[sess_no];
         break;
     }
@@ -64,7 +115,7 @@ function sendGoodbye(map){
 
     // TODO get header ready - no data
     server.send(goodbyeMessage, 0, goodbyeMessage.length, session_info[1], session_info[0]);
-    sendGoodbye(map);
+    shutDown(map);
 }
 
 // Verify a P0P header
@@ -76,35 +127,16 @@ function verify(received_magic, received_version) {
     }
 }
 
-// Handle input from stdin
-function stdinListen() {
-	var stdin = process.stdin;
-	stdin.resume();
-	stdin.on('data',function(chunk){
-	    input = chunk.toString()
-	    if (line == 'q') {
-	        // send GOODBYE to ALL clients with open sessions, then terminate
-			sendGoodbye(sessions);
-		}
-	})
-
-	// On EOF
-	stdin.on('end', function() = {
-	    // send GOODBYE to all clients with open sessions, then terminate
-	    sendGoodbye(sessions);
-	});
-	}
-}
 
 server.on('listening', function () {
     var address = server.address();
-    console.log('UDP Server listening on ' + address.address + ":" + address.port);
+    console.log('waiting on port ' + address.port + '...');
 });
 
-server.on('message', function (message, client_port) {
+server.on('message', function (message, client) {
 
     // parse header
-    if (buf.length < 12) {
+    if (message.length < 12) {
 		return false;
 	}
 
@@ -113,54 +145,65 @@ server.on('message', function (message, client_port) {
     var command = message.readUInt8(3);
     var seqNo = message.readUInt32BE(4);
     var sess_id = message.readUInt32BE(8);
-
+/*
+    console.log("MAGIC: " + magic_number);
+    console.log("VERSION: " + version_number);
+    console.log("COMMAND: " + command);
+    console.log("seqNo: " + seqNo);
+    console.log("sess_id: " + sess_id);
+*/
     // check that MAGIC and VERSION are correct
     //if not, exit function/discard/ignore packet
     if(!verify(magic_number, version_number)){
-        break;
+        return;
     } else { // process message
+        if (command == Command.HELLO) {
+            if (sess_id in sessions){ // message is a duplicate
 
-        if (/*HELLO*/) {
-            // check whether or not session id already exists
-            // create session
-            // send HELLO back
-            // set timer (where will timer be held? in the session?)
-        } else if () {
-
+            } else { // create new session, respond in kind
+                // create new session, respond with HELLO, start timer
+                sessions[sess_id] = [client.address, client.port, 0, -2];
+                //console.log("event handler : " + sessions[sess_id]);
+                send(Command.HELLO, "", sess_id, function(sess_id){
+                    process.stdout.write("0x" + sess_id.toString(16) + " ");
+                    process.stdout.write("[" + sessions[sess_id][2] + "] ");
+                    process.stdout.write("Session created\n");
+                    startTimer(sess_id);
+                });
+            }
+        }
+        else if (command == Command.DATA) {
+            if(sess_id in sessions){
+                data = message.toString('utf-8', 12, message.length);
+                sessions[sess_id][2]++;
+                send(Command.ALIVE, "", sess_id, function(sess_id){
+                    process.stdout.write("0x" + sess_id.toString(16) + " ");
+                    process.stdout.write("[" + sessions[sess_id][2] + "] ");
+                    process.stdout.write(data + "\n");
+                    startTimer(sess_id);
+                });
+            }
         }
     }
 });
 
-
-// TODO create data structure to store sessions.
-
-// a map to hold sessions: {(session_id -> (address, port, seqNo, timer)}
-var sessions = {};
-
-/*
-
-ADD TO MAP
-
-a["key1"] = "value1";
-a["key2"] = "value2";
-
-/*
-
-ACCESS MAP
-
-if ("key1" in a) {
-   // something
-} else {
-   // something else
-}
-*/
+// an array to hold sessions: {[session_id] -> [address, port, seqNo, timer]}
+var sessions = [];
 
 server.bind(SERVER_PORT);
 
+//listen for input
 process.stdin.on('data', function(chunk){
+    input = chunk.toString()
+    if (input == 'q') {
+        // send GOODBYE to ALL clients with open sessions, then terminate
+        shutDown(sessions);
+    }
 });
 
+// On EOF
 process.stdin.on('end', function() {
+    // send GOODBYE to all clients with open sessions, then terminate
     util.log("shutdown requested");
-    process.exit(0);
+    shutDown(sessions);
 });
